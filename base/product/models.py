@@ -4,6 +4,7 @@ from address.models import ShopAddress
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from address.models import UserAddress
 
 User = get_user_model()
 
@@ -67,6 +68,7 @@ class OrderProduct(models.Model):
         CANCELED = "CANCELED", "Canceled"
         
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="order_products")
+    customer_address = models.ForeignKey(UserAddress, on_delete=models.CASCADE, related_name="orders")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="order_items")
     price = models.DecimalField(max_digits=7, decimal_places=2, blank=True)
     courier = models.ForeignKey(User, related_name="couriers", on_delete=models.SET_NULL,

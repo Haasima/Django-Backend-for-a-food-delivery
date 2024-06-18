@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Shop, Product, Category, OrderProduct
 from django.contrib.auth import get_user_model
+from address.models import UserAddress
 
 User = get_user_model()
 
@@ -53,13 +54,13 @@ class OrderProductSerializer(serializers.ModelSerializer):
                 'id', 'status', 'created', 'delivered_at', 'customer', 'courier',
                 'product',
                 )
-        
+
 class DeliveryCourierSerializer(serializers.ModelSerializer):
     customer = CustomerSerializer()
     class Meta:
         model = OrderProduct
         fields = (
-            'customer', 'created', 'delivered_at',
+            'customer', 'customer_address', 'created', 'delivered_at',
         )
         
 class DeliveryCustomerSerializer(serializers.ModelSerializer):
