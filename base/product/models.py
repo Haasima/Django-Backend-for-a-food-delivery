@@ -16,10 +16,17 @@ class Shop(models.Model):
     description = models.TextField()
     rate = models.DecimalField(max_digits=3, decimal_places=2, default=None, null=True, 
                                validators=[MinValueValidator(0), MaxValueValidator(5)])
-    address = models.OneToOneField(ShopAddress, related_name="shop", on_delete=models.CASCADE)
+    address = models.ForeignKey(ShopAddress, related_name="shop", on_delete=models.CASCADE)
     
     def __str__(self):
         return f"{self.name}"
+    
+class Seller(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    shop = models.ForeignKey(Shop, related_name="sellers", on_delete=models.CASCADE)
+    
+    def __str__(self):
+        return f"{self.shop.name}"
     
 class Category(models.Model):
     name = models.CharField(max_length=250)
@@ -35,6 +42,7 @@ class Product(models.Model):
         IN_STOCK = "IN STOCK", "In stock"
     
     shop = models.ManyToManyField(Shop, related_name="products")
+    seller = models.ForeignKey(Seller, related_name="products", on_delete=models.CASCADE)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="products")
     name = models.CharField(max_length=100)
     description = models.TextField()
@@ -48,6 +56,13 @@ class Product(models.Model):
     updated = models.DateTimeField(auto_now=True)
     created = models.DateTimeField(auto_now_add=True)
     
+    def save(self, *args, **kwargs):
+        if self.quantity == 0:
+            self.status = self.Status.OUT_OF_STOCK
+        elif self.status == self.Status.OUT_OF_STOCK and self.quantity > 0:
+            self.status = self.Status.IN_STOCK
+        super(Product, self).save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.name}"
 
@@ -82,9 +97,18 @@ class OrderProduct(models.Model):
         self.price = self.product.price * (1 - self.product.discount)
         # вызов ошибки, если пользователь courier не является курьером
         self.clean()
+        # умньшение количества товара при заказе
+        if self.product.quantity < 1:
+            raise ValidationError("Not enough quantity in stock.")
+        self.product.quantity -= 1
+        self.product.save()
         # установка времени доставки
         if self.status == "DELIVERED" and self.delivered_at is None:
             self.delivered_at = timezone.now()
+        # если status = CANCELED, то мы возращаем количество товаров в исходное состояние
+        elif self.status == "CANCELED" and self.delivered_at is None:
+            self.product.quantity += 1
+            self.product.save()
             
         super().save(*args, **kwargs)
         

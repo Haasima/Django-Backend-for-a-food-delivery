@@ -2,8 +2,14 @@ from typing import Any
 from django.contrib import admin
 from django.db.models.query import QuerySet
 from django.http import HttpRequest
-from .models import Shop, Product, ProductImage, Category, OrderProduct
+from .models import Shop, Product, ProductImage, Category, OrderProduct, Seller
 from django.db.models import Prefetch
+
+
+@admin.register(Seller)
+class SellerModelAdmin(admin.ModelAdmin):
+    list_display = ('user', 'shop')
+    list_filter = ('shop',)
 
 @admin.register(OrderProduct)
 class OrderProductAdmin(admin.ModelAdmin):

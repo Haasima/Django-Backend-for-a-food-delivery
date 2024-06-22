@@ -2,29 +2,28 @@ from rest_framework import viewsets
 from .serializers import (ProductSerializer, 
                           OrderProductSerializer, 
                           DeliveryCourierSerializer, DeliveryCustomerSerializer)
-from .models import Product, Shop, OrderProduct
+from .models import Product, Shop, OrderProduct, Seller
 from django.db.models import Prefetch
 from rest_framework.permissions import IsAdminUser, AllowAny
 from rest_framework import mixins
-from .permissions import IsAdminOrCourier, IsAdminOrCustomer
+from .permissions import IsAdminOrCourier, IsAdminOrCustomer, isOwnerOrReadOnly
 
 
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
-    permission_classes = (AllowAny,)
-    authentication_classes = []
-    queryset = Product.objects.prefetch_related(Prefetch('shop', queryset=Shop.objects.select_related('address')))\
-                               .select_related('category')
-                               
-                               
+    permission_classes = (isOwnerOrReadOnly,)
+    queryset = Product.objects.prefetch_related(Prefetch('seller', queryset=Seller.objects.select_related('shop')))\
+                              .select_related('category')
+
+
 class OrderProductViewSet(viewsets.ModelViewSet):
     serializer_class = OrderProductSerializer
     permission_classes = (IsAdminUser,)
     queryset = OrderProduct.objects.select_related('customer', 'courier').prefetch_related(Prefetch('product',
                                     queryset=Product.objects.select_related('category')\
                                     .prefetch_related(Prefetch('shop', queryset=Shop.objects.select_related('address')))))
-    
-    
+
+
 class CourierDeliveryViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     serializer_class = DeliveryCourierSerializer
     permission_classes = (IsAdminOrCourier,)
