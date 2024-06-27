@@ -1,3 +1,4 @@
+from rest_framework.exceptions import ValidationError
 from rest_framework import serializers
 from .models import Shop, Product, Category, OrderProduct, Seller
 from address.models import UserAddress
@@ -29,7 +30,7 @@ class SellerSerializer(serializers.ModelSerializer):
         
 class ProductSerializer(serializers.ModelSerializer):
     category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all())
-    seller = SellerSerializer()
+    seller = serializers.PrimaryKeyRelatedField(queryset=Seller.objects.all())
     class Meta:
         model = Product
         fields = (
@@ -39,39 +40,18 @@ class ProductSerializer(serializers.ModelSerializer):
         )
     
     def create(self, validated_data):
-        seller_data = validated_data.get('seller')
-        seller_shop_data = seller_data.get('shop').pk
-        seller_user_data = seller_data.get('user').pk
-        
-        user = User.objects.filter(id=seller_user_data).first()
-        shop = Shop.objects.filter(id=seller_shop_data).first()
-        
-        seller = Seller.objects.filter(user=user, shop=shop).first()
-
-        product = Product.objects.create(seller=seller, **validated_data)
-        product.shop.set([shop])
+        product = Product.objects.create(**validated_data)
         return product
     
     def update(self, instance, validated_data):
-        seller_data = validated_data.get('seller', None)
-        shop_data = validated_data.get('shop', None)
-
-        if seller_data:
-            seller_shop_data = seller_data.get('shop').pk
-            seller_user_data = seller_data.get('user').pk
-
-            user = User.objects.filter(id=seller_user_data).first()
-            shop = Shop.objects.filter(id=seller_shop_data).first()
-
-            seller = Seller.objects.filter(user=user, shop=shop).first()
+        seller = validated_data.get('seller', None)
             
-            if seller is None:
-                raise serializers.ValidationError("The specified seller does not exist.")
+        if seller is None:
+            raise serializers.ValidationError("The specified seller does not exist.")
 
-            instance.seller = seller
-
-        if shop_data:
-            instance.shop.set([shop])
+        instance.seller = seller
+        shop = seller.shop
+        instance.shop.set([shop])
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -98,17 +78,19 @@ class CourierSerializer(serializers.ModelSerializer):
 class OrderProductSerializer(serializers.ModelSerializer):
     customer = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
     courier = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
-
+    status = serializers.ChoiceField(choices=OrderProduct.Status.choices, default=OrderProduct.Status.SHIPPED)
+    order_quantity = serializers.IntegerField(default=1)
+    price = serializers.DecimalField(max_digits=13, decimal_places=2, default=0.0)
+    
     class Meta:
         model = OrderProduct
         fields = (
-                'id', 'status', 'created', 'delivered_at', 'customer', 'courier',
-                'product',
+                'id', 'status', 'order_quantity', 'price', 'created', 'delivered_at',
+                'customer', 'courier', 'product',
                 )
         
     def create(self, validated_data):
         customer = validated_data.get('customer')
-        product = validated_data.get('product')
         
         customer_address = UserAddress.objects.filter(user=customer).first()
         if not customer_address:
@@ -116,17 +98,44 @@ class OrderProductSerializer(serializers.ModelSerializer):
         
         # Создание объекта OrderProduct с указанием всех необходимых полей
         order_product = OrderProduct(
-            customer=customer,
             customer_address=customer_address,
-            courier=validated_data.get('courier'),
-            product=product,
-            price=product.price,
-            status=validated_data.get('status', 'SHIPPED')
+            **validated_data
         )
         
         order_product.save()
         
         return order_product
+    
+    def update(self, instance, validated_data):
+        product = validated_data.get('product')
+        status = validated_data.get('status', 'SHIPPED')
+        delivered_at = validated_data.get('delivered_at', None)
+        new_order_quantity = validated_data.get('order_quantity', 0)
+        current_order_quantity = instance.order_quantity
+
+        # Рассчитываем разницу между текущим количеством заказа и новым количеством заказа
+        difference_quantity = new_order_quantity - current_order_quantity
+
+        # Проверяем, есть ли достаточно количества продукта для удовлетворения нового заказа
+        if product.quantity < difference_quantity:
+            raise ValidationError("Not enough quantity in stock.")
+    
+        # Обновляем количество продукта
+        product.quantity -= difference_quantity
+        
+        # Если заказ отменён, то возвращаем количество продуктов
+        if status == "CANCELED" and delivered_at is None:
+            product.quantity += new_order_quantity
+            new_order_quantity = 0
+            
+        product.save()
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+        return instance
+        
 
 class DeliveryCourierSerializer(serializers.ModelSerializer):
     customer = CustomerSerializer()

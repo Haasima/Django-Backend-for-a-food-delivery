@@ -38,11 +38,11 @@ class BaseAddress(models.Model):
     
     
 class UserAddress(BaseAddress):  
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="address")
+    user = models.ManyToManyField(User, related_name="address", blank=True)
     code_number = models.CharField(max_length=8, blank=True, null=True)
     
     def __str__(self):
-        return f"{self.user.username} — {self.city} — {self.street}"
+        return f"{self.city} — {self.street}"
     
 class ShopAddress(BaseAddress):
     def __str__(self):

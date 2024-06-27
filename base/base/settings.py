@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import timedelta
 import os
+import sys
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,7 +34,7 @@ INSTALLED_APPS = [
     'django_countries',
     'smart_selects',
     'cities_light',
-    'debug_toolbar',
+    # 'debug_toolbar',
     'token_auth',
     'product',
     'address',
@@ -45,11 +46,16 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     #'django.middleware.csrf.CsrfViewMiddleware',
     "token_auth.custom_middleware.CustomCsrfMiddleware",
-    "debug_toolbar.middleware.DebugToolbarMiddleware",
+    #"debug_toolbar.middleware.DebugToolbarMiddleware",
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Добавление Debug Toolbar только если это не тесты
+if DEBUG and 'test' not in sys.argv:
+    INSTALLED_APPS += ['debug_toolbar']
+    MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
 
 ROOT_URLCONF = 'base.urls'
 
@@ -198,6 +204,11 @@ MEDIA_URL = '/media/'
 INTERNAL_IPS = [
     "127.0.0.1",
 ]
+
+DEBUG_TOOLBAR_CONFIG = {
+    # ваш существующий конфиг
+    'SHOW_TOOLBAR_CALLBACK': lambda request: DEBUG and 'test' not in sys.argv,
+}
 
 # LOGGING = {
 #     'version': 1,

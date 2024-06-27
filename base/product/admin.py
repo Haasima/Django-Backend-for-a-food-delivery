@@ -31,7 +31,7 @@ class CategoryAdmin(admin.ModelAdmin):
     
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('get_shops', 'category', 'name', 'status', 'price')
+    list_display = ('id', 'get_shops', 'category', 'name', 'status', 'price')
     list_filter = ('category', 'status')
     
     def get_shops(self, obj):

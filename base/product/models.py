@@ -46,22 +46,26 @@ class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="products")
     name = models.CharField(max_length=100)
     description = models.TextField()
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(max_digits=13, decimal_places=2, default=0.0, validators=[MinValueValidator(0.0)])
     discount = models.DecimalField(max_digits=3, decimal_places=2, default=0.0,
-                                   validators=[MinValueValidator(0), MaxValueValidator(1)])
+                                   validators=[MinValueValidator(0.0), MaxValueValidator(1.0)])
     rate = models.DecimalField(max_digits=3, decimal_places=2, default=None, null=True, 
-                               validators=[MinValueValidator(0), MaxValueValidator(5)])
+                               validators=[MinValueValidator(0.0), MaxValueValidator(5.0)])
     status = models.CharField(max_length=50, choices=Status.choices, default=Status.OUT_OF_STOCK)
-    quantity = models.PositiveIntegerField(default=0)
+    quantity = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
     updated = models.DateTimeField(auto_now=True)
     created = models.DateTimeField(auto_now_add=True)
     
+    
     def save(self, *args, **kwargs):
+        self.price = self.price * (1 - self.discount)
+        
         if self.quantity == 0:
             self.status = self.Status.OUT_OF_STOCK
         elif self.status == self.Status.OUT_OF_STOCK and self.quantity > 0:
             self.status = self.Status.IN_STOCK
         super(Product, self).save(*args, **kwargs)
+
 
     def __str__(self):
         return f"{self.name}"
@@ -85,36 +89,49 @@ class OrderProduct(models.Model):
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="order_products")
     customer_address = models.ForeignKey(UserAddress, on_delete=models.CASCADE, related_name="orders")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="order_items")
-    price = models.DecimalField(max_digits=7, decimal_places=2, blank=True)
+    price = models.DecimalField(max_digits=13, decimal_places=2, default=0.0, validators=[MinValueValidator(0.0)])
+    order_quantity = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)])
     courier = models.ForeignKey(User, related_name="couriers", on_delete=models.SET_NULL,
                                 null=True, limit_choices_to={"role": "COURIER"})
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.SHIPPED)
     created = models.DateTimeField(auto_now_add=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
+    
+    
+    def clean(self) -> None:
+        if self.product.quantity < 0:
+            raise ValidationError(f"Product quantity cannot be negative.")
+
+        if self.courier and self.courier.role != "COURIER":
+            raise ValidationError("The assigned courier must have the role 'COURIER'.")
+        
 
     def save(self, *args, **kwargs):
-        # price с учётом скидки
-        self.price = self.product.price * (1 - self.product.discount)
-        # вызов ошибки, если пользователь courier не является курьером
+        # вызов clean для проверки валидаций
         self.clean()
-        # умньшение количества товара при заказе
-        if self.product.quantity < 1:
-            raise ValidationError("Not enough quantity in stock.")
-        self.product.quantity -= 1
-        self.product.save()
+        
+        order_quantity = self.order_quantity
+
+        # уменьшение количества товара при заказе или возвращение товара на склад
+        if self._state.adding:
+            if self.product.quantity < 1:
+                raise ValidationError("Not enough quantity in stock.")
+            self.product.quantity -= order_quantity
+        else:
+            if self.status == "CANCELED" and self.delivered_at is None:
+                self.product.quantity += order_quantity
+                order_quantity = 0 # сброс количества заказов при отмене заказа
+        
         # установка времени доставки
         if self.status == "DELIVERED" and self.delivered_at is None:
             self.delivered_at = timezone.now()
-        # если status = CANCELED, то мы возращаем количество товаров в исходное состояние
-        elif self.status == "CANCELED" and self.delivered_at is None:
-            self.product.quantity += 1
-            self.product.save()
+            
+        # price с учётом скидки и количества заказов
+        self.price = self.product.price * order_quantity
             
         super().save(*args, **kwargs)
+        self.product.save()
         
-    def clean(self) -> None:
-        if self.courier and self.courier.role != "COURIER":
-            raise ValidationError("The assigned courier must have the role 'COURIER'.")
         
     def __str__(self):
         return f"Customer: {self.customer} | Courier: {self.courier} | Product: {self.product}"
