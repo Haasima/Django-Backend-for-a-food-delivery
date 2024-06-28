@@ -28,3 +28,5 @@ __pypackages__/
 
 # pyenv
 .python-version
+
+schema.yml
