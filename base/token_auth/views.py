@@ -1,5 +1,5 @@
 from rest_framework.views import APIView
-from .serializers import (UserSerializer, RegisterSerializer)
+from .serializers import (UserSerializer, RegisterSerializer, LoginSerializer)
 from rest_framework.response import Response 
 from rest_framework import status
 from django.contrib.auth import get_user_model
@@ -9,7 +9,12 @@ from django.shortcuts import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.decorators import authentication_classes, permission_classes
 from django.middleware import csrf
+import logging
 from django.conf import settings
+from drf_spectacular.utils import (extend_schema, extend_schema_view, 
+                                   OpenApiParameter, OpenApiResponse, OpenApiExample)
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -20,7 +25,22 @@ def get_tokens_for_user(user):
         'refresh': str(refresh),
         'access': str(refresh.access_token),
     }
-
+    
+    
+@extend_schema_view(
+    get=extend_schema(
+        description='Получить сообщение о необходимости предоставления телефона и пароля для входа.',
+        responses={200: OpenApiResponse(description='Сообщение о необходимости предоставления телефона и пароля для входа.')}
+    ),
+    post=extend_schema(
+        description='Войти с помощью телефона и пароля.',
+        request=LoginSerializer,
+        responses={
+            200: OpenApiResponse(description='Успешный вход, токены в ответе.'),
+            404: OpenApiResponse(description='Неверный телефон или пароль, или аккаунт не активен.'),
+        },
+    )
+)
 @authentication_classes([])
 @permission_classes([AllowAny])
 class LoginView(APIView):
@@ -30,46 +50,39 @@ class LoginView(APIView):
         }, status=status.HTTP_200_OK)
     
     def post(self, request, format=None):
-        data = request.data
+        serializer = LoginSerializer(data=request.data)
         response = Response()
-        phone = data.get('phone', None)
-        password = data.get('password', None)
-        try:
-            user = User.objects.get(phone=phone)
-        except User.DoesNotExist:
-            return Response({"Invalid" : "Invalid phone or password"}, status=status.HTTP_404_NOT_FOUND)
         
-        if user.is_active:
-            if user.check_password(password):
-                tokens = get_tokens_for_user(user)
-                access_token = tokens["access"]
-                refresh_token = tokens["refresh"]
-                # refresh_token
-                response.set_cookie(
-                    key = "refresh_token",
-                    value = refresh_token,
-                    expires = settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'],
-                    secure = settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
-                    httponly = settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
-                    samesite = settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE']
-                )
-                # access_token
-                response.set_cookie(
-                    key = settings.SIMPLE_JWT['AUTH_COOKIE'], 
-                    value = access_token,
-                    expires = settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'],
-                    secure = settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
-                    httponly = settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
-                    samesite = settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE']
-                )
-                csrf.get_token(request)
-                response.data = {"Success" : "Login successfully", "data": tokens}
-                return response
-            else:
-                return Response({"Invalid" : "Invalid phone or password"}, status=status.HTTP_404_NOT_FOUND)
-        else:
-            return Response({"No active" : "This account is not active"}, status=status.HTTP_404_NOT_FOUND)
-
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = serializer.validated_data['user']
+       
+        tokens = get_tokens_for_user(user)
+        access_token = tokens["access"]
+        refresh_token = tokens["refresh"]
+        # refresh_token
+        response.set_cookie(
+            key = "refresh_token",
+            value = refresh_token,
+            expires = settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'],
+            secure = settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
+            httponly = settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
+            samesite = settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE']
+        )
+        # access_token
+        response.set_cookie(
+            key = settings.SIMPLE_JWT['AUTH_COOKIE'], 
+            value = access_token,
+            expires = settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'],
+            secure = settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
+            httponly = settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
+            samesite = settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE']
+        )
+        csrf.get_token(request)
+        response.data = {"Success" : "Login successfully", "data": tokens}
+        return response
+    
 
 @permission_classes([IsAdminOrIsSelf])
 class UserView(APIView):
@@ -80,12 +93,14 @@ class UserView(APIView):
     put:
     Updating information about the current user.
     """
+    @extend_schema(request=UserSerializer, responses=UserSerializer, methods=["GET"])
     def get(self, request, username):
         user = get_object_or_404(User, username=username)
         self.check_object_permissions(request, user)
         serializer = UserSerializer(user)
         return Response(serializer.data)
     
+    @extend_schema(request=UserSerializer, responses=UserSerializer, methods=["PUT"])
     def put(self, request, username):
         user = get_object_or_404(User, username=username)
         self.check_object_permissions(request, user)
@@ -103,10 +118,12 @@ class RegisterView(APIView):
     post:
     Register new user.
     """
+    @extend_schema(request=RegisterSerializer, responses=RegisterSerializer, methods=["GET"])
     def get(self, request):        
         serializer = RegisterSerializer()
         return Response({'serializer': serializer.data})
     
+    @extend_schema(request=RegisterSerializer, responses=RegisterSerializer, methods=["POST"])
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         
@@ -134,3 +151,4 @@ class LogoutView(APIView):
         response.delete_cookie("refresh_token")
         response.delete_cookie(settings.SIMPLE_JWT['AUTH_COOKIE'])
         return response
+ 

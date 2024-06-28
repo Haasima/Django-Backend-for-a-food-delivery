@@ -12,6 +12,32 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ('id', 'username', 'first_name', 'last_name', 'email', 'phone', 'address')
         
+        
+class LoginSerializer(serializers.Serializer):
+    phone = serializers.CharField(required=True)
+    password = serializers.CharField(write_only=True, required=True)
+    
+    def validate(self, attrs):
+        phone = attrs.get('phone')
+        password = attrs.get('password')
+        
+        if phone and password:
+            try:
+                user = User.objects.get(phone=phone)
+            except User.DoesNotExist:
+                raise serializers.ValidationError('Wrong phone or password')
+            
+            if not user.check_password(password):
+                raise serializers.ValidationError('Wrong phone or password')
+            
+            if not user.is_active:
+                raise serializers.ValidationError('This account is not active')
+            
+            attrs['user'] = user
+            return attrs
+        else:
+            raise serializers.ValidationError('Must include "phone" and "password"')
+    
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])

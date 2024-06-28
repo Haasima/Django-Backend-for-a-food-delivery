@@ -6,6 +6,8 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
     TokenVerifyView
 )
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -16,6 +18,8 @@ urlpatterns = [
     
     path('api/v1/', include('token_auth.urls', namespace='auth')),
     path('api/v1/', include('product.urls', namespace='product')),
+    path('api/v1/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/v1/schema/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='docs'),
 ]
 
 if settings.DEBUG:

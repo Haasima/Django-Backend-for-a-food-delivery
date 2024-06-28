@@ -16,8 +16,6 @@ SECRET_KEY = 'django-insecure-o7nn4xx++r=pvao2pjv7hxylddd2@_%8&no8p40h=-szjzdkx-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
 
 # Application definition
 
@@ -34,6 +32,7 @@ INSTALLED_APPS = [
     'django_countries',
     'smart_selects',
     'cities_light',
+    'drf_spectacular',
     # 'debug_toolbar',
     'token_auth',
     'product',
@@ -76,17 +75,6 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'base.wsgi.application'
-
-
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
 
 
 # Password validation
@@ -139,6 +127,7 @@ AUTH_USER_MODEL = 'token_auth.CustomUser'
 
 # REST_FRAMEWORK settings
 REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'token_auth.authenticate.CustomAuthentication',
     ),
@@ -149,6 +138,12 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     )
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Django Backend for a food delivery',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
 }
 
 SIMPLE_JWT = {
