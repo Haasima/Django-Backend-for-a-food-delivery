@@ -16,7 +16,7 @@ class Shop(models.Model):
     description = models.TextField()
     rate = models.DecimalField(max_digits=3, decimal_places=2, default=None, null=True, 
                                validators=[MinValueValidator(0), MaxValueValidator(5)])
-    address = models.ForeignKey(ShopAddress, related_name="shop", on_delete=models.CASCADE)
+    address = models.ForeignKey(ShopAddress, related_name="shop", on_delete=models.PROTECT)
     
     def __str__(self):
         return f"{self.name}"
@@ -31,7 +31,7 @@ class Seller(models.Model):
 class Category(models.Model):
     name = models.CharField(max_length=250)
     parent = models.ForeignKey("self", null=True, blank=True,
-                               on_delete=models.CASCADE, related_name="subcategories")
+                               on_delete=models.PROTECT, related_name="subcategories")
     
     def __str__(self):
         return f"{self.name}"
@@ -43,7 +43,7 @@ class Product(models.Model):
     
     shop = models.ManyToManyField(Shop, related_name="products")
     seller = models.ForeignKey(Seller, related_name="products", on_delete=models.CASCADE)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="products")
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="products")
     name = models.CharField(max_length=100)
     description = models.TextField()
     price = models.DecimalField(max_digits=13, decimal_places=2, default=0.0, validators=[MinValueValidator(0.0)])
